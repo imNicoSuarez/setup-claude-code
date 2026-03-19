@@ -101,10 +101,7 @@ NEED_BUN=false
 NEED_GIT=false
 NEED_CLAUDE=false
 NEED_FIGMA=false
-NEED_SKILLS=false
-
-SKILLS_DIR="$HOME/.gemini/antigravity/skills"
-CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
+NEED_FIGMA_CLI=false
 
 # — Node.js
 NODE_STATUS=""
@@ -170,14 +167,13 @@ else
   NEED_FIGMA=true
 fi
 
-# — Skills
-SKILLS_STATUS=""
-if [ -d "$SKILLS_DIR" ] && [ "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
-  SKILL_COUNT=$(ls "$SKILLS_DIR" | wc -l | tr -d ' ')
-  SKILLS_STATUS="${GREEN}✅  Skills de Antigravity — ${SKILL_COUNT} skills instaladas${RESET}"
+# — figma-cli
+FIGMA_CLI_STATUS=""
+if require_command fig-start; then
+  FIGMA_CLI_STATUS="${GREEN}✅  figma-cli — instalado${RESET}"
 else
-  SKILLS_STATUS="${RED}❌  Skills de Antigravity — NO instaladas${RESET}"
-  NEED_SKILLS=true
+  FIGMA_CLI_STATUS="${RED}❌  figma-cli — NO instalado${RESET}"
+  NEED_FIGMA_CLI=true
 fi
 
 # ── Mostrar diagnóstico ───────────────────────────────────────
@@ -192,22 +188,22 @@ echo ""
 echo -e "  ${BOLD}Claude Code y plugins:${RESET}"
 echo -e "   $CLAUDE_STATUS"
 echo -e "   $FIGMA_STATUS"
-echo -e "   $SKILLS_STATUS"
+echo -e "   $FIGMA_CLI_STATUS"
 separator
 
 # ── Resumen de lo que se va a hacer ──────────────────────────
 echo ""
 NOTHING_TO_DO=true
 
-if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_SKILLS; then
+if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_FIGMA_CLI; then
   NOTHING_TO_DO=false
   echo -e "  ${BOLD}📦  Se va a instalar / configurar:${RESET}"
-  $NEED_NODE   && echo -e "   ${CYAN}→${RESET} Node.js"
-  $NEED_GIT    && echo -e "   ${CYAN}→${RESET} git"
-  $NEED_BUN    && echo -e "   ${CYAN}→${RESET} Bun"
-  $NEED_CLAUDE && echo -e "   ${CYAN}→${RESET} Claude Code"
-  $NEED_FIGMA  && echo -e "   ${CYAN}→${RESET} Figma MCP Server"
-  $NEED_SKILLS && echo -e "   ${CYAN}→${RESET} Skills de Antigravity"
+  $NEED_NODE      && echo -e "   ${CYAN}→${RESET} Node.js"
+  $NEED_GIT       && echo -e "   ${CYAN}→${RESET} git"
+  $NEED_BUN       && echo -e "   ${CYAN}→${RESET} Bun"
+  $NEED_CLAUDE    && echo -e "   ${CYAN}→${RESET} Claude Code"
+  $NEED_FIGMA     && echo -e "   ${CYAN}→${RESET} Figma MCP Server"
+  $NEED_FIGMA_CLI && echo -e "   ${CYAN}→${RESET} figma-cli"
 else
   echo -e "  ${GREEN}${BOLD}🎉  ¡Todo ya está instalado y configurado!${RESET}"
 fi
@@ -233,12 +229,12 @@ fi
 STEP=0
 count_steps() {
   local n=0
-  $NEED_NODE   && n=$((n+1))
-  $NEED_GIT    && n=$((n+1))
-  $NEED_BUN    && n=$((n+1))
-  $NEED_CLAUDE && n=$((n+1))
-  $NEED_FIGMA  && n=$((n+1))
-  $NEED_SKILLS && n=$((n+1))
+  $NEED_NODE      && n=$((n+1))
+  $NEED_GIT       && n=$((n+1))
+  $NEED_BUN       && n=$((n+1))
+  $NEED_CLAUDE    && n=$((n+1))
+  $NEED_FIGMA     && n=$((n+1))
+  $NEED_FIGMA_CLI && n=$((n+1))
   echo $n
 }
 TOTAL=$(count_steps)
@@ -327,23 +323,17 @@ if $NEED_FIGMA; then
   fi
 fi
 
-# ── Skills de Antigravity ─────────────────────────────────────
-if $NEED_SKILLS; then
-  step "Instalando Skills de Antigravity"
-  run_quietly "Descargando Skills (puede tardar 1-2 min)" bash -c "npx --yes antigravity-awesome-skills" || \
-    warn "No se pudieron instalar las skills automáticamente"
-
-  if [ -d "$SKILLS_DIR" ] && [ "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
-    SKILL_COUNT=$(ls "$SKILLS_DIR" | wc -l | tr -d ' ')
-    ok "${SKILL_COUNT} skills instaladas en $SKILLS_DIR"
+# ── figma-cli ─────────────────────────────────────────────────
+if $NEED_FIGMA_CLI; then
+  step "Instalando figma-cli"
+  run_quietly "Instalando figma-cli desde GitHub" npm install -g github:silships/figma-cli || {
+    warn "Reintentando con sudo..."
+    sudo npm install -g github:silships/figma-cli 2>/dev/null
+  }
+  if require_command fig-start; then
+    ok "figma-cli instalado"
   else
-    warn "Skills no encontradas en $SKILLS_DIR (verificá manualmente)"
-  fi
-
-  mkdir -p "$CLAUDE_SKILLS_DIR"
-  if [ -d "$SKILLS_DIR" ]; then
-    ln -sf "$SKILLS_DIR" "$CLAUDE_SKILLS_DIR/antigravity" 2>/dev/null && \
-      ok "Symlink creado: ~/.claude/skills/antigravity" || true
+    fail "No se pudo instalar figma-cli"
   fi
 fi
 
@@ -370,12 +360,11 @@ if require_command claude && claude mcp list 2>/dev/null | grep -q "figma"; then
 else
   printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Figma MCP:" "⚠️  Verificar en Claude Code"
 fi
-# Skills
-if [ -d "$SKILLS_DIR" ] && [ "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
-  SC=$(ls "$SKILLS_DIR" | wc -l | tr -d ' ')
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Skills:" "✅ ${SC} skills instaladas"
+# figma-cli
+if require_command fig-start; then
+  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "figma-cli:" "✅ Instalado"
 else
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Skills:" "⚠️  Ver advertencias arriba"
+  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "figma-cli:" "⚠️  Ver advertencias arriba"
 fi
 echo -e "${CYAN}${BOLD}║${RESET}"
 echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
