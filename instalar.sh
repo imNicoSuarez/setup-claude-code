@@ -2,19 +2,21 @@
 # ============================================================
 #  🤖  INSTALADOR DE CLAUDE CODE
 #  Verifica qué tenés instalado y solo instala lo que falta.
+#
+#  Creado por Team UX Demanda — MercadoLibre
 # ============================================================
 
 set -euo pipefail
 
 # ── Colores ───────────────────────────────────────────────────
-BOLD="\033[1m"
-DIM="\033[2m"
-RED="\033[0;31m"
-GREEN="\033[0;32m"
-YELLOW="\033[1;33m"
-CYAN="\033[0;36m"
-BLUE="\033[0;34m"
-RESET="\033[0m"
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+BLUE=$'\033[0;34m'
+RESET=$'\033[0m'
 
 ERRORS=()
 SPINNER_PID=""
@@ -41,13 +43,32 @@ info() { echo -e "  ${DIM}→  $1${RESET}"; }
 fail() { echo -e "  ${RED}❌  $1${RESET}"; ERRORS+=("$1"); }
 
 separator() {
-  echo -e "${DIM}  ──────────────────────────────────────────────────────${RESET}"
+  printf "${DIM}  ──────────────────────────────────────────────────────${RESET}\n"
 }
 
 section() {
   echo ""
-  echo -e "${BLUE}${BOLD}  $1${RESET}"
+  printf "${BLUE}${BOLD}  %s${RESET}\n" "$1"
   separator
+}
+
+# ── Box UI helpers ─────────────────────────────────────────────
+BOX_INNER=54
+
+# Print a box line with content left-aligned and closing ║
+box_line() {
+  local content="$1"
+  local visible
+  visible=$(printf '%s' "$content" | sed $'s/\033\[[0-9;]*m//g')
+  local vlen=${#visible}
+  local pad=$(( BOX_INNER - vlen ))
+  [ "$pad" -lt 0 ] && pad=0
+  printf "${CYAN}${BOLD}║${RESET}%s%${pad}s${CYAN}${BOLD}║${RESET}\n" "$content" ""
+}
+
+# Print an empty box line (blank row)
+box_empty() {
+  printf "${CYAN}${BOLD}║%${BOX_INNER}s║${RESET}\n" ""
 }
 
 spinner_start() {
@@ -89,10 +110,11 @@ run_quietly() {
 clear
 echo ""
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}${BOLD}║       🤖  INSTALADOR DE CLAUDE CODE  🤖               ║${RESET}"
+echo -e "${CYAN}${BOLD}║       🤖  INSTALADOR DE CLAUDE CODE  🤖              ║${RESET}"
+echo -e "${CYAN}${BOLD}║        Team UX Demanda — MercadoLibre                ║${RESET}"
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${RESET}"
 echo ""
-echo -e "${DIM}  Analizando tu sistema...${RESET}"
+echo -e "${DIM}  Analizando tu sistema, aguarda un momento...${RESET}"
 echo ""
 
 # ── Estado de cada componente ─────────────────────────────────
@@ -230,13 +252,13 @@ NOTHING_TO_DO=true
 if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_FRONTENDER_MCP || $NEED_FIGMA_PLUGIN; then
   NOTHING_TO_DO=false
   echo -e "  ${BOLD}📦  Se va a instalar / configurar:${RESET}"
-  $NEED_NODE              && echo -e "   ${CYAN}→${RESET} Node.js"
-  $NEED_GIT               && echo -e "   ${CYAN}→${RESET} git"
-  $NEED_BUN               && echo -e "   ${CYAN}→${RESET} Bun"
-  $NEED_CLAUDE            && echo -e "   ${CYAN}→${RESET} Claude Code"
-  $NEED_FIGMA             && echo -e "   ${CYAN}→${RESET} Figma MCP Server"
-  $NEED_FRONTENDER_MCP    && echo -e "   ${CYAN}→${RESET} Frontender Web MCP"
-  $NEED_FIGMA_PLUGIN      && echo -e "   ${CYAN}→${RESET} Figma Plugin (claude-plugins-official)"
+  $NEED_NODE              && echo -e "   ${CYAN}→${RESET} Node.js              ${DIM}— entorno de ejecución de JavaScript, requerido por Claude Code${RESET}"
+  $NEED_GIT               && echo -e "   ${CYAN}→${RESET} git                  ${DIM}— control de versiones, necesario para clonar y gestionar repos${RESET}"
+  $NEED_BUN               && echo -e "   ${CYAN}→${RESET} Bun                  ${DIM}— runtime JS ultrarrápido, acelera la instalación de paquetes${RESET}"
+  $NEED_CLAUDE            && echo -e "   ${CYAN}→${RESET} Claude Code          ${DIM}— asistente de IA en tu terminal para escribir y revisar código${RESET}"
+  $NEED_FIGMA             && echo -e "   ${CYAN}→${RESET} Figma MCP Server     ${DIM}— permite a Claude leer diseños de Figma directamente${RESET}"
+  $NEED_FRONTENDER_MCP    && echo -e "   ${CYAN}→${RESET} Frontender Web MCP   ${DIM}— acceso a componentes Andes y guías de diseño MELI desde Claude${RESET}"
+  $NEED_FIGMA_PLUGIN      && echo -e "   ${CYAN}→${RESET} Figma Plugin         ${DIM}— integración oficial de Claude dentro de la app de Figma${RESET}"
   # $NEED_FIGMA_CLI && echo -e "   ${CYAN}→${RESET} ux-figma-cli${OLD_FIGMA_CLI_INSTALLED:+ (migración desde versión vieja)}"  # desactivado temporalmente
 else
   echo -e "  ${GREEN}${BOLD}🎉  ¡Todo ya está instalado y configurado!${RESET}"
@@ -247,11 +269,11 @@ read -rp "  Presioná ENTER para continuar (o Ctrl+C para cancelar): "
 echo ""
 
 if $NOTHING_TO_DO; then
-  echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════╗${RESET}"
-  echo -e "${CYAN}${BOLD}║      ✅  TODO EN ORDEN — NADA QUE INSTALAR            ║${RESET}"
-  echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
-  echo -e "${CYAN}${BOLD}║${RESET}  Ejecutá ${BOLD}claude${RESET} en la terminal para empezar          ${CYAN}${BOLD}║${RESET}"
-  echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${RESET}"
+  printf "${CYAN}${BOLD}╔══════════════════════════════════════════════════════╗${RESET}\n"
+  printf "${CYAN}${BOLD}║      ✅  TODO EN ORDEN — NADA QUE INSTALAR           ║${RESET}\n"
+  printf "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}\n"
+  box_line "  Ejecuta ${BOLD}claude${RESET} en la terminal para empezar"
+  printf "${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${RESET}\n"
   echo ""
   exit 0
 fi
@@ -305,9 +327,9 @@ install_node_linux() {
 if $NEED_NODE; then
   step "Instalando Node.js"
   if [ "$OS" = "mac" ]; then
-    run_quietly "Instalando Node.js" install_node_mac && ok "Node.js $(node --version) instalado" || fail "No se pudo instalar Node.js"
+    run_quietly "Instalando Node.js" install_node_mac && ok "Node.js $(node --version) instalado — entorno JS requerido por Claude Code" || fail "No se pudo instalar Node.js"
   else
-    run_quietly "Instalando Node.js" install_node_linux && ok "Node.js $(node --version) instalado" || fail "No se pudo instalar Node.js"
+    run_quietly "Instalando Node.js" install_node_linux && ok "Node.js $(node --version) instalado — entorno JS requerido por Claude Code" || fail "No se pudo instalar Node.js"
   fi
 fi
 
@@ -315,9 +337,9 @@ fi
 if $NEED_GIT; then
   step "Instalando git"
   if [ "$OS" = "mac" ]; then
-    run_quietly "Instalando git" bash -c "brew install git" && ok "git $(git --version | awk '{print $3}') instalado" || fail "No se pudo instalar git"
+    run_quietly "Instalando git" bash -c "brew install git" && ok "git $(git --version | awk '{print $3}') instalado — control de versiones para gestionar repos" || fail "No se pudo instalar git"
   else
-    run_quietly "Instalando git" bash -c "sudo apt-get install -y git" && ok "git instalado" || fail "No se pudo instalar git"
+    run_quietly "Instalando git" bash -c "sudo apt-get install -y git" && ok "git instalado — control de versiones para gestionar repos" || fail "No se pudo instalar git"
   fi
 fi
 
@@ -326,7 +348,7 @@ if $NEED_BUN; then
   step "Instalando Bun"
   run_quietly "Instalando Bun" bash -c "curl -fsSL https://bun.sh/install | bash" || true
   if [ -f "$HOME/.bun/bin/bun" ]; then
-    ok "Bun instalado"
+    ok "Bun instalado — runtime JS ultrarrápido para instalar paquetes más rápido"
   else
     warn "Bun no disponible (no es crítico para Claude Code)"
   fi
@@ -342,7 +364,7 @@ if $NEED_CLAUDE; then
   }
   if require_command claude; then
     CLAUDE_VER=$(claude --version 2>&1 | head -1)
-    ok "Claude Code ${CLAUDE_VER}"
+    ok "Claude Code ${CLAUDE_VER} — asistente de IA en la terminal para escribir y revisar código"
   else
     fail "No se pudo instalar Claude Code"
   fi
@@ -353,7 +375,7 @@ if $NEED_FIGMA; then
   step "Registrando Figma MCP"
   if require_command claude; then
     claude mcp add --scope user --transport http figma https://mcp.figma.com/mcp 2>&1 && \
-      ok "Figma MCP registrado globalmente" || fail "No se pudo registrar Figma MCP"
+      ok "Figma MCP registrado — permite a Claude leer diseños de Figma directamente" || fail "No se pudo registrar Figma MCP"
   else
     warn "Claude Code no disponible, saltando Figma MCP"
   fi
@@ -364,7 +386,7 @@ if $NEED_FRONTENDER_MCP; then
   step "Registrando Frontender Web MCP"
   if require_command claude; then
     claude mcp add Frontender-Web-MCP -- mcp-remote-proxy https://frontender-web-mcp.melioffice.com/mcp --transport http 2>&1 && \
-      ok "Frontender Web MCP registrado" || fail "No se pudo registrar Frontender Web MCP"
+      ok "Frontender Web MCP registrado — acceso a componentes Andes y guías de diseño MELI desde Claude" || fail "No se pudo registrar Frontender Web MCP"
   else
     warn "Claude Code no disponible, saltando Frontender Web MCP"
   fi
@@ -375,7 +397,7 @@ if $NEED_FIGMA_PLUGIN; then
   step "Instalando Figma Plugin"
   if require_command claude; then
     claude plugin install figma@claude-plugins-official 2>&1 && \
-      ok "Figma plugin instalado" || fail "No se pudo instalar el Figma plugin"
+      ok "Figma plugin instalado — integración oficial de Claude dentro de la app de Figma" || fail "No se pudo instalar el Figma plugin"
   else
     warn "Claude Code no disponible, saltando Figma plugin"
   fi
@@ -457,68 +479,50 @@ fi
 
 echo ""
 echo ""
-echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════╗${RESET}"
+printf "${CYAN}${BOLD}╔══════════════════════════════════════════════════════╗${RESET}\n"
 if [ ${#ERRORS[@]} -eq 0 ]; then
-  echo -e "${CYAN}${BOLD}║         ✅  INSTALACIÓN COMPLETADA CON ÉXITO          ║${RESET}"
+  printf "${CYAN}${BOLD}║         ✅  INSTALACION COMPLETADA CON EXITO          ║${RESET}\n"
 else
-  echo -e "${CYAN}${BOLD}║       ⚠️   INSTALACIÓN COMPLETADA CON ADVERTENCIAS    ║${RESET}"
+  printf "${CYAN}${BOLD}║       ⚠️   INSTALACION COMPLETADA CON ADVERTENCIAS    ║${RESET}\n"
 fi
-echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}"
+printf "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}\n"
+box_empty
 # Claude Code
 FINAL_CLAUDE=$(claude --version 2>&1 | head -1 || echo "no disponible")
-printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Claude Code:" "$FINAL_CLAUDE"
+box_line "  $(printf '%-18s  %s' "Claude Code:" "$FINAL_CLAUDE")"
 # Figma MCP
 if require_command claude && claude mcp list 2>/dev/null | grep -q "figma"; then
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Figma MCP:" "✅ Registrado"
+  box_line "  $(printf '%-18s  %s' "Figma MCP:" "OK Registrado")"
 else
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Figma MCP:" "⚠️  Verificar en Claude Code"
+  box_line "  $(printf '%-18s  %s' "Figma MCP:" "-- Verificar en Claude Code")"
 fi
 # Frontender Web MCP
 if require_command claude && claude mcp list 2>/dev/null | grep -q "Frontender-Web-MCP"; then
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Frontender MCP:" "✅ Registrado"
+  box_line "  $(printf '%-18s  %s' "Frontender MCP:" "OK Registrado")"
 else
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Frontender MCP:" "⚠️  Verificar en Claude Code"
+  box_line "  $(printf '%-18s  %s' "Frontender MCP:" "-- Verificar en Claude Code")"
 fi
 # Figma Plugin
 if require_command claude && claude plugin list 2>/dev/null | grep -qi "figma"; then
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Figma Plugin:" "✅ Instalado"
+  box_line "  $(printf '%-18s  %s' "Figma Plugin:" "OK Instalado")"
 else
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Figma Plugin:" "⚠️  Verificar en Claude Code"
+  box_line "  $(printf '%-18s  %s' "Figma Plugin:" "-- Verificar en Claude Code")"
 fi
-# ux-figma-cli (desactivado temporalmente)
-# if require_command fig-start || { [ -d "$NEW_FIGMA_CLI_DIR/node_modules" ] && grep -q "fig-start" "$HOME/.zshrc" 2>/dev/null; }; then
-#   printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "ux-figma-cli:" "✅ Instalado (nueva terminal para fig-start)"
-# else
-#   printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "ux-figma-cli:" "⚠️  Ver advertencias arriba"
-# fi
-echo -e "${CYAN}${BOLD}║${RESET}"
-echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}PRÓXIMOS PASOS:${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}1.${RESET} Abrí una terminal NUEVA (para recargar el PATH)"
-echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}2.${RESET} Ejecutá ${BOLD}claude${RESET} para iniciar Claude Code"
-echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}3.${RESET} Para Figma MCP: /mcp → figma → Authenticate"
-echo -e "${CYAN}${BOLD}║${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}3.${RESET} Ejecutá ${BOLD}uxclaude${RESET} para conectarte a Figma ${GREEN}✅ recomendado${RESET}"  # ux-figma-cli desactivado temporalmente
-# echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}UX FIGMA CLI — CÓMO USAR:${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  ${CYAN}uxclaude${RESET}    Inicia Figma + plugin + Claude Code ${GREEN}← recomendado${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  ${CYAN}fig-start${RESET}   Alias alternativo (mismo efecto)"
-# echo -e "${CYAN}${BOLD}║${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}Instalación del plugin (1 sola vez):${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  En Figma: Plugins → Development → Import plugin from manifest"
-# echo -e "${CYAN}${BOLD}║${RESET}  Manifest: ${YELLOW}$NEW_FIGMA_CLI_DIR/plugin/manifest.json${RESET}"
-# echo -e "${CYAN}${BOLD}║${RESET}  Luego: Plugins → Development → UX Claude  (cada sesión)"
-# echo -e "${CYAN}${BOLD}║${RESET}"
+box_empty
+printf "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}\n"
+box_line "  ${BOLD}PROXIMOS PASOS:${RESET}"
+box_empty
+box_line "  ${GREEN}1.${RESET} Abri una terminal NUEVA (para recargar el PATH)"
+box_line "  ${GREEN}2.${RESET} Ejecuta ${BOLD}claude${RESET} para iniciar Claude Code"
+box_line "  ${GREEN}3.${RESET} Para Figma MCP: /mcp -> figma -> Authenticate"
+box_empty
 if [ ${#ERRORS[@]} -gt 0 ]; then
-  echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
-  echo -e "${CYAN}${BOLD}║${RESET}  ${RED}${BOLD}ERRORES:${RESET}"
+  printf "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}\n"
+  box_line "  ${RED}${BOLD}ERRORES:${RESET}"
   for err in "${ERRORS[@]}"; do
-    printf "${CYAN}${BOLD}║${RESET}  ${RED}• %s${RESET}\n" "$err"
+    box_line "  ${RED}* ${err}${RESET}"
   done
-  echo -e "${CYAN}${BOLD}║${RESET}"
+  box_empty
 fi
-echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${RESET}"
+printf "${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${RESET}\n"
 echo ""
