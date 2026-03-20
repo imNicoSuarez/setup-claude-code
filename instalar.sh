@@ -102,6 +102,8 @@ NEED_GIT=false
 NEED_CLAUDE=false
 NEED_FIGMA=false
 NEED_FIGMA_CLI=false
+OLD_FIGMA_CLI_INSTALLED=false
+NEW_FIGMA_CLI_DIR="$HOME/.ux-figma-cli"
 
 # — Node.js
 NODE_STATUS=""
@@ -167,14 +169,20 @@ else
   NEED_FIGMA=true
 fi
 
-# — figma-cli
+# — ux-figma-cli
 FIGMA_CLI_STATUS=""
-if require_command fig-start; then
-  FIGMA_CLI_STATUS="${GREEN}✅  figma-cli — instalado${RESET}"
-elif [ -d "$HOME/.figma-cli/node_modules" ] && grep -q "fig-start" "$HOME/.zshrc" 2>/dev/null; then
-  FIGMA_CLI_STATUS="${GREEN}✅  figma-cli — instalado (abrí una terminal nueva para usar fig-start)${RESET}"
+# Detectar versión vieja (silships/figma-cli en ~/.figma-cli)
+if [ -d "$HOME/.figma-cli/.git" ] && git -C "$HOME/.figma-cli" remote get-url origin 2>/dev/null | grep -qi "figma-cli"; then
+  OLD_FIGMA_CLI_INSTALLED=true
+fi
+# Detectar versión nueva
+if [ -d "$NEW_FIGMA_CLI_DIR/.git" ] && git -C "$NEW_FIGMA_CLI_DIR" remote get-url origin 2>/dev/null | grep -qi "ux-figma-cli"; then
+  FIGMA_CLI_STATUS="${GREEN}✅  ux-figma-cli — instalado${RESET}"
+elif $OLD_FIGMA_CLI_INSTALLED; then
+  FIGMA_CLI_STATUS="${YELLOW}⚠️   figma-cli (versión vieja) instalado — se va a migrar al nuevo${RESET}"
+  NEED_FIGMA_CLI=true
 else
-  FIGMA_CLI_STATUS="${RED}❌  figma-cli — NO instalado${RESET}"
+  FIGMA_CLI_STATUS="${RED}❌  ux-figma-cli — NO instalado${RESET}"
   NEED_FIGMA_CLI=true
 fi
 
@@ -205,7 +213,7 @@ if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_
   $NEED_BUN       && echo -e "   ${CYAN}→${RESET} Bun"
   $NEED_CLAUDE    && echo -e "   ${CYAN}→${RESET} Claude Code"
   $NEED_FIGMA     && echo -e "   ${CYAN}→${RESET} Figma MCP Server"
-  $NEED_FIGMA_CLI && echo -e "   ${CYAN}→${RESET} figma-cli"
+  $NEED_FIGMA_CLI && echo -e "   ${CYAN}→${RESET} ux-figma-cli${OLD_FIGMA_CLI_INSTALLED:+ (migración desde versión vieja)}"
 else
   echo -e "  ${GREEN}${BOLD}🎉  ¡Todo ya está instalado y configurado!${RESET}"
 fi
@@ -325,32 +333,50 @@ if $NEED_FIGMA; then
   fi
 fi
 
-# ── figma-cli ─────────────────────────────────────────────────
+# ── ux-figma-cli ──────────────────────────────────────────────
 if $NEED_FIGMA_CLI; then
-  step "Instalando figma-cli"
+  step "Instalando ux-figma-cli"
 
-  FIGMA_CLI_DIR="$HOME/.figma-cli"
+  # Desinstalar versión vieja si existe
+  if $OLD_FIGMA_CLI_INSTALLED; then
+    info "Eliminando figma-cli (versión anterior)..."
+    rm -rf "$HOME/.figma-cli"
+    # Limpiar alias viejo del shell rc
+    for RC_CLEAN in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+      if [ -f "$RC_CLEAN" ] && grep -q "alias fig-start=" "$RC_CLEAN"; then
+        if [ "$OS" = "mac" ]; then
+          sed -i '' '/alias fig-start=/d' "$RC_CLEAN"
+          sed -i '' '/# Figma CLI/d' "$RC_CLEAN"
+        else
+          sed -i '/alias fig-start=/d' "$RC_CLEAN"
+          sed -i '/# Figma CLI/d' "$RC_CLEAN"
+        fi
+        info "Alias anterior eliminado de $RC_CLEAN"
+      fi
+    done
+    ok "figma-cli anterior desinstalado"
+  fi
 
-  # Si ya existe, lo actualizamos; si no, lo clonamos
-  if [ -d "$FIGMA_CLI_DIR/.git" ]; then
-    info "Actualizando repo existente en $FIGMA_CLI_DIR"
-    run_quietly "Actualizando figma-cli" bash -c "cd '$FIGMA_CLI_DIR' && git pull" || true
+  # Clonar o actualizar el nuevo repo
+  if [ -d "$NEW_FIGMA_CLI_DIR/.git" ]; then
+    info "Actualizando repo existente en $NEW_FIGMA_CLI_DIR"
+    run_quietly "Actualizando ux-figma-cli" bash -c "cd '$NEW_FIGMA_CLI_DIR' && git pull" || true
   else
-    [ -d "$FIGMA_CLI_DIR" ] && rm -rf "$FIGMA_CLI_DIR"
-    run_quietly "Clonando figma-cli" git clone https://github.com/silships/figma-cli.git "$FIGMA_CLI_DIR" || {
-      fail "No se pudo clonar el repositorio figma-cli"
+    [ -d "$NEW_FIGMA_CLI_DIR" ] && rm -rf "$NEW_FIGMA_CLI_DIR"
+    run_quietly "Clonando ux-figma-cli" git clone git@github.com:imNicoSuarez/ux-figma-cli.git "$NEW_FIGMA_CLI_DIR" || {
+      fail "No se pudo clonar el repositorio ux-figma-cli"
     }
   fi
 
-  if [ -d "$FIGMA_CLI_DIR" ]; then
+  if [ -d "$NEW_FIGMA_CLI_DIR" ]; then
     # Instalar dependencias
-    run_quietly "Instalando dependencias de figma-cli" bash -c "cd '$FIGMA_CLI_DIR' && npm install" || {
-      fail "npm install falló en figma-cli"
+    run_quietly "Instalando dependencias de ux-figma-cli" bash -c "cd '$NEW_FIGMA_CLI_DIR' && npm install" || {
+      fail "npm install falló en ux-figma-cli"
     }
 
     # Ejecutar setup-alias para agregar fig-start al shell rc
     info "Ejecutando setup-alias..."
-    (cd "$FIGMA_CLI_DIR" && npm run setup-alias 2>&1) || {
+    (cd "$NEW_FIGMA_CLI_DIR" && npm run setup-alias 2>&1) || {
       fail "npm run setup-alias falló"
     }
 
@@ -369,12 +395,10 @@ if $NEED_FIGMA_CLI; then
       source "$SHELL_RC" 2>/dev/null || true
     fi
 
-    # Verificar: fig-start en PATH o como función/alias cargado
-    if require_command fig-start || (source "$SHELL_RC" 2>/dev/null && require_command fig-start); then
-      ok "figma-cli instalado — usá 'fig-start' en una terminal nueva"
+    if require_command fig-start || ([ -n "$SHELL_RC" ] && source "$SHELL_RC" 2>/dev/null && require_command fig-start); then
+      ok "ux-figma-cli instalado — usá 'fig-start' en una terminal nueva"
     else
-      # Puede que el alias solo esté disponible en shells interactivos nuevos
-      warn "figma-cli configurado — abrí una terminal nueva y ejecutá 'fig-start'"
+      warn "ux-figma-cli configurado — abrí una terminal nueva y ejecutá 'fig-start'"
     fi
   fi
 fi
@@ -402,11 +426,11 @@ if require_command claude && claude mcp list 2>/dev/null | grep -q "figma"; then
 else
   printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "Figma MCP:" "⚠️  Verificar en Claude Code"
 fi
-# figma-cli
-if require_command fig-start || { [ -d "$HOME/.figma-cli/node_modules" ] && grep -q "fig-start" "$HOME/.zshrc" 2>/dev/null; }; then
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "figma-cli:" "✅ Instalado (nueva terminal para fig-start)"
+# ux-figma-cli
+if require_command fig-start || { [ -d "$NEW_FIGMA_CLI_DIR/node_modules" ] && grep -q "fig-start" "$HOME/.zshrc" 2>/dev/null; }; then
+  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "ux-figma-cli:" "✅ Instalado (nueva terminal para fig-start)"
 else
-  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "figma-cli:" "⚠️  Ver advertencias arriba"
+  printf "${CYAN}${BOLD}║${RESET}  %-18s  %s\n" "ux-figma-cli:" "⚠️  Ver advertencias arriba"
 fi
 echo -e "${CYAN}${BOLD}║${RESET}"
 echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
@@ -414,19 +438,19 @@ echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}PRÓXIMOS PASOS:${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}1.${RESET} Abrí una terminal NUEVA (para recargar el PATH)"
 echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}2.${RESET} Ejecutá ${BOLD}claude${RESET} para iniciar Claude Code"
-echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}3.${RESET} Ejecutá ${BOLD}fig-start${RESET} para iniciar Figma CLI"
+echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}3.${RESET} Ejecutá ${BOLD}uxclaude${RESET} para conectarte a Figma ${GREEN}✅ recomendado${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}  ${GREEN}4.${RESET} Para Figma MCP: /mcp → figma → Authenticate"
 echo -e "${CYAN}${BOLD}║${RESET}"
 echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}FIGMA CLI — MODOS DE USO:${RESET}"
+echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}UX FIGMA CLI — CÓMO USAR:${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}  ${CYAN}fig-start${RESET}          Yolo Mode (default) — parchea Figma"
-echo -e "${CYAN}${BOLD}║${RESET}  ${CYAN}fig-start --safe${RESET}   Safe Mode — plugin sin parchear ${GREEN}✅ recomendado${RESET}"
+echo -e "${CYAN}${BOLD}║${RESET}  ${CYAN}uxclaude${RESET}    Inicia Figma + plugin + Claude Code ${GREEN}← recomendado${RESET}"
+echo -e "${CYAN}${BOLD}║${RESET}  ${CYAN}fig-start${RESET}   Alias alternativo (mismo efecto)"
 echo -e "${CYAN}${BOLD}║${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}Safe Mode — instalación del plugin (1 sola vez):${RESET}"
+echo -e "${CYAN}${BOLD}║${RESET}  ${BOLD}Instalación del plugin (1 sola vez):${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}  En Figma: Plugins → Development → Import plugin from manifest"
-echo -e "${CYAN}${BOLD}║${RESET}  Manifest: ${YELLOW}$HOME/.figma-cli/plugin/manifest.json${RESET}"
-echo -e "${CYAN}${BOLD}║${RESET}  Luego: Plugins → Development → FigCli  (cada sesión)"
+echo -e "${CYAN}${BOLD}║${RESET}  Manifest: ${YELLOW}$NEW_FIGMA_CLI_DIR/plugin/manifest.json${RESET}"
+echo -e "${CYAN}${BOLD}║${RESET}  Luego: Plugins → Development → UX Claude  (cada sesión)"
 echo -e "${CYAN}${BOLD}║${RESET}"
 if [ ${#ERRORS[@]} -gt 0 ]; then
   echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}"
