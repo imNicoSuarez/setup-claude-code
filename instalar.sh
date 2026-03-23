@@ -123,6 +123,7 @@ NEED_BUN=false
 NEED_GIT=false
 NEED_CLAUDE=false
 NEED_FIGMA=false
+NEED_MCP_REMOTE=false
 NEED_FRONTENDER_MCP=false
 NEED_FIGMA_PLUGIN=false
 # NEED_FIGMA_CLI=false               # ux-figma-cli desactivado temporalmente
@@ -193,6 +194,15 @@ else
   NEED_FIGMA=true
 fi
 
+# — mcp-remote (provee el comando mcp-remote-proxy, requerido por varios MCPs)
+MCP_REMOTE_STATUS=""
+if require_command mcp-remote-proxy; then
+  MCP_REMOTE_STATUS="${GREEN}✅  mcp-remote — ya instalado${RESET}"
+else
+  MCP_REMOTE_STATUS="${RED}❌  mcp-remote — NO instalado (requerido por Frontender Web MCP)${RESET}"
+  NEED_MCP_REMOTE=true
+fi
+
 # — Frontender Web MCP
 FRONTENDER_MCP_STATUS=""
 if require_command claude && claude mcp list 2>/dev/null | grep -q "Frontender-Web-MCP"; then
@@ -240,6 +250,7 @@ echo ""
 echo -e "  ${BOLD}Claude Code y plugins:${RESET}"
 echo -e "   $CLAUDE_STATUS"
 echo -e "   $FIGMA_STATUS"
+echo -e "   $MCP_REMOTE_STATUS"
 echo -e "   $FRONTENDER_MCP_STATUS"
 echo -e "   $FIGMA_PLUGIN_STATUS"
 # echo -e "   $FIGMA_CLI_STATUS"  # ux-figma-cli desactivado temporalmente
@@ -249,7 +260,7 @@ separator
 echo ""
 NOTHING_TO_DO=true
 
-if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_FRONTENDER_MCP || $NEED_FIGMA_PLUGIN; then
+if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_MCP_REMOTE || $NEED_FRONTENDER_MCP || $NEED_FIGMA_PLUGIN; then
   NOTHING_TO_DO=false
   echo -e "  ${BOLD}📦  Se va a instalar / configurar:${RESET}"
   $NEED_NODE              && echo -e "   ${CYAN}→${RESET} Node.js              ${DIM}— entorno de ejecución de JavaScript, requerido por Claude Code${RESET}"
@@ -257,6 +268,7 @@ if $NEED_NODE || $NEED_GIT || $NEED_BUN || $NEED_CLAUDE || $NEED_FIGMA || $NEED_
   $NEED_BUN               && echo -e "   ${CYAN}→${RESET} Bun                  ${DIM}— runtime JS ultrarrápido, acelera la instalación de paquetes${RESET}"
   $NEED_CLAUDE            && echo -e "   ${CYAN}→${RESET} Claude Code          ${DIM}— asistente de IA en tu terminal para escribir y revisar código${RESET}"
   $NEED_FIGMA             && echo -e "   ${CYAN}→${RESET} Figma MCP Server     ${DIM}— permite a Claude leer diseños de Figma directamente${RESET}"
+  $NEED_MCP_REMOTE        && echo -e "   ${CYAN}→${RESET} mcp-remote           ${DIM}— proxy para MCPs remotos vía HTTP (requerido por Frontender Web MCP)${RESET}"
   $NEED_FRONTENDER_MCP    && echo -e "   ${CYAN}→${RESET} Frontender Web MCP   ${DIM}— acceso a componentes Andes y guías de diseño MELI desde Claude${RESET}"
   $NEED_FIGMA_PLUGIN      && echo -e "   ${CYAN}→${RESET} Figma Plugin         ${DIM}— integración oficial de Claude dentro de la app de Figma${RESET}"
   # $NEED_FIGMA_CLI && echo -e "   ${CYAN}→${RESET} ux-figma-cli${OLD_FIGMA_CLI_INSTALLED:+ (migración desde versión vieja)}"  # desactivado temporalmente
@@ -290,6 +302,7 @@ count_steps() {
   $NEED_BUN       && n=$((n+1))
   $NEED_CLAUDE    && n=$((n+1))
   $NEED_FIGMA             && n=$((n+1))
+  $NEED_MCP_REMOTE        && n=$((n+1))
   $NEED_FRONTENDER_MCP    && n=$((n+1))
   $NEED_FIGMA_PLUGIN      && n=$((n+1))
   # $NEED_FIGMA_CLI && n=$((n+1))  # ux-figma-cli desactivado temporalmente
@@ -381,10 +394,26 @@ if $NEED_FIGMA; then
   fi
 fi
 
+# ── mcp-remote ────────────────────────────────────────────────
+if $NEED_MCP_REMOTE; then
+  step "Instalando mcp-remote"
+  run_quietly "Instalando mcp-remote" npm install -g mcp-remote || {
+    warn "Reintentando con sudo..."
+    sudo npm install -g mcp-remote 2>/dev/null
+  }
+  if require_command mcp-remote-proxy; then
+    ok "mcp-remote instalado — proxy para MCPs remotos vía HTTP"
+  else
+    fail "No se pudo instalar mcp-remote"
+  fi
+fi
+
 # ── Frontender Web MCP ────────────────────────────────────────
 if $NEED_FRONTENDER_MCP; then
   step "Registrando Frontender Web MCP"
-  if require_command claude; then
+  if ! require_command mcp-remote-proxy; then
+    fail "mcp-remote no está disponible, no se puede registrar Frontender Web MCP"
+  elif require_command claude; then
     claude mcp add Frontender-Web-MCP -- mcp-remote-proxy https://frontender-web-mcp.melioffice.com/mcp --transport http 2>&1 && \
       ok "Frontender Web MCP registrado — acceso a componentes Andes y guías de diseño MELI desde Claude" || fail "No se pudo registrar Frontender Web MCP"
   else
@@ -396,8 +425,26 @@ fi
 if $NEED_FIGMA_PLUGIN; then
   step "Instalando Figma Plugin"
   if require_command claude; then
-    claude plugin install figma@claude-plugins-official 2>&1 && \
-      ok "Figma plugin instalado — integración oficial de Claude dentro de la app de Figma" || fail "No se pudo instalar el Figma plugin"
+    # Si Claude recién se instaló, darle unos segundos para inicializar el marketplace
+    if $NEED_CLAUDE; then
+      info "Esperando que Claude Code inicialice el marketplace de plugins..."
+      sleep 4
+    fi
+    # Actualizar marketplace antes de instalar
+    info "Actualizando marketplace de plugins..."
+    claude plugin marketplace update claude-plugins-official 2>/dev/null || true
+    # Primer intento
+    if claude plugin install figma@claude-plugins-official 2>/dev/null; then
+      ok "Figma plugin instalado — integración oficial de Claude dentro de la app de Figma"
+    else
+      # Reintento con delay por si el marketplace aún no estaba listo
+      info "Reintentando instalación del Figma plugin..."
+      sleep 5
+      claude plugin marketplace update claude-plugins-official 2>/dev/null || true
+      claude plugin install figma@claude-plugins-official 2>&1 && \
+        ok "Figma plugin instalado — integración oficial de Claude dentro de la app de Figma" || \
+        warn "No se pudo instalar el Figma plugin automáticamente. Instalalo manualmente con: claude plugin install figma@claude-plugins-official"
+    fi
   else
     warn "Claude Code no disponible, saltando Figma plugin"
   fi
@@ -495,6 +542,12 @@ if require_command claude && claude mcp list 2>/dev/null | grep -q "figma"; then
   box_line "  $(printf '%-18s  %s' "Figma MCP:" "OK Registrado")"
 else
   box_line "  $(printf '%-18s  %s' "Figma MCP:" "-- Verificar en Claude Code")"
+fi
+# mcp-remote
+if require_command mcp-remote-proxy; then
+  box_line "  $(printf '%-18s  %s' "mcp-remote:" "OK Instalado")"
+else
+  box_line "  $(printf '%-18s  %s' "mcp-remote:" "-- Verificar instalación")"
 fi
 # Frontender Web MCP
 if require_command claude && claude mcp list 2>/dev/null | grep -q "Frontender-Web-MCP"; then
