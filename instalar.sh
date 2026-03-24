@@ -397,14 +397,51 @@ fi
 # ── mcp-remote ────────────────────────────────────────────────
 if $NEED_MCP_REMOTE; then
   step "Instalando mcp-remote"
-  run_quietly "Instalando mcp-remote" npm install -g mcp-remote || {
+
+  # Agregar npm global bin al PATH antes de instalar
+  if require_command npm; then
+    NPM_GLOBAL_BIN="$(npm prefix -g 2>/dev/null)/bin"
+    export PATH="$NPM_GLOBAL_BIN:$PATH"
+  fi
+
+  # Intento 1: npm install -g directo (capturando error para diagnóstico)
+  MCP_REMOTE_TMP=$(mktemp)
+  if npm install -g mcp-remote >"$MCP_REMOTE_TMP" 2>&1; then
+    MCP_REMOTE_ERR=""
+  else
+    MCP_REMOTE_ERR=$(cat "$MCP_REMOTE_TMP")
+    # Intento 2: con sudo
     warn "Reintentando con sudo..."
-    sudo npm install -g mcp-remote 2>/dev/null
-  }
+    SUDO_TMP=$(mktemp)
+    if sudo npm install -g mcp-remote >"$SUDO_TMP" 2>&1; then
+      MCP_REMOTE_ERR=""
+    else
+      MCP_REMOTE_ERR="$MCP_REMOTE_ERR"$'\n'"$(cat "$SUDO_TMP")"
+    fi
+    rm -f "$SUDO_TMP"
+  fi
+  rm -f "$MCP_REMOTE_TMP"
+
+  # Refrescar PATH post-instalación (por si nvm cambió el prefix)
+  if require_command npm; then
+    export PATH="$(npm prefix -g 2>/dev/null)/bin:$PATH"
+  fi
+
   if require_command mcp-remote-proxy; then
     ok "mcp-remote instalado — proxy para MCPs remotos vía HTTP"
   else
-    fail "No se pudo instalar mcp-remote"
+    # Intento 3: verificar disponibilidad vía npx
+    if npx --yes mcp-remote --help &>/dev/null 2>&1; then
+      ok "mcp-remote disponible vía npx"
+    else
+      fail "No se pudo instalar mcp-remote"
+      if [ -n "$MCP_REMOTE_ERR" ]; then
+        echo -e "${DIM}     Error detallado:${RESET}"
+        echo "$MCP_REMOTE_ERR" | tail -10 | while IFS= read -r line; do
+          echo -e "     ${DIM}${line}${RESET}"
+        done
+      fi
+    fi
   fi
 fi
 
@@ -576,6 +613,18 @@ if [ ${#ERRORS[@]} -gt 0 ]; then
     box_line "  ${RED}* ${err}${RESET}"
   done
   box_empty
+  # Si mcp-remote falló, mostrar el error de npm para diagnóstico
+  if ! require_command mcp-remote-proxy && [ -n "${MCP_REMOTE_ERR:-}" ]; then
+    printf "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}\n"
+    box_line "  ${YELLOW}${BOLD}DETALLE ERROR mcp-remote:${RESET}"
+    box_empty
+    echo "$MCP_REMOTE_ERR" | tail -10 | while IFS= read -r line; do
+      # Truncar líneas largas para que entren en el box
+      truncated="${line:0:52}"
+      box_line "  ${DIM}${truncated}${RESET}"
+    done
+    box_empty
+  fi
 fi
 printf "${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${RESET}\n"
 echo ""
