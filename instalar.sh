@@ -194,9 +194,9 @@ else
   NEED_FIGMA=true
 fi
 
-# — mcp-remote (provee el comando mcp-remote-proxy, requerido por varios MCPs)
+# — mcp-remote (provee el comando mcp-remote, requerido por varios MCPs)
 MCP_REMOTE_STATUS=""
-if require_command mcp-remote-proxy; then
+if require_command mcp-remote; then
   MCP_REMOTE_STATUS="${GREEN}✅  mcp-remote — ya instalado${RESET}"
 else
   MCP_REMOTE_STATUS="${RED}❌  mcp-remote — NO instalado (requerido por Frontender Web MCP)${RESET}"
@@ -427,7 +427,7 @@ if $NEED_MCP_REMOTE; then
     export PATH="$(npm prefix -g 2>/dev/null)/bin:$PATH"
   fi
 
-  if require_command mcp-remote-proxy; then
+  if require_command mcp-remote; then
     ok "mcp-remote instalado — proxy para MCPs remotos vía HTTP"
   else
     # Intento 3: verificar disponibilidad vía npx
@@ -435,12 +435,14 @@ if $NEED_MCP_REMOTE; then
       ok "mcp-remote disponible vía npx"
     else
       fail "No se pudo instalar mcp-remote"
-      if [ -n "$MCP_REMOTE_ERR" ]; then
-        echo -e "${DIM}     Error detallado:${RESET}"
-        echo "$MCP_REMOTE_ERR" | tail -10 | while IFS= read -r line; do
-          echo -e "     ${DIM}${line}${RESET}"
-        done
+      if [ -z "$MCP_REMOTE_ERR" ]; then
+        NPM_GLOBAL_BIN_PATH="$(npm prefix -g 2>/dev/null)/bin"
+        MCP_REMOTE_ERR="npm install reportó éxito pero 'mcp-remote' no se encontró en PATH."$'\n'"npm global bin: ${NPM_GLOBAL_BIN_PATH}"$'\n'"PATH: $PATH"
       fi
+      echo -e "${DIM}     Error detallado:${RESET}"
+      echo "$MCP_REMOTE_ERR" | tail -10 | while IFS= read -r line; do
+        echo -e "     ${DIM}${line}${RESET}"
+      done
     fi
   fi
 fi
@@ -448,10 +450,10 @@ fi
 # ── Frontender Web MCP ────────────────────────────────────────
 if $NEED_FRONTENDER_MCP; then
   step "Registrando Frontender Web MCP"
-  if ! require_command mcp-remote-proxy; then
+  if ! require_command mcp-remote; then
     fail "mcp-remote no está disponible, no se puede registrar Frontender Web MCP"
   elif require_command claude; then
-    claude mcp add Frontender-Web-MCP -- mcp-remote-proxy https://frontender-web-mcp.melioffice.com/mcp --transport http 2>&1 && \
+    claude mcp add Frontender-Web-MCP -- mcp-remote https://frontender-web-mcp.melioffice.com/mcp --transport http 2>&1 && \
       ok "Frontender Web MCP registrado — acceso a componentes Andes y guías de diseño MELI desde Claude" || fail "No se pudo registrar Frontender Web MCP"
   else
     warn "Claude Code no disponible, saltando Frontender Web MCP"
@@ -581,7 +583,7 @@ else
   box_line "  $(printf '%-18s  %s' "Figma MCP:" "-- Verificar en Claude Code")"
 fi
 # mcp-remote
-if require_command mcp-remote-proxy; then
+if require_command mcp-remote; then
   box_line "  $(printf '%-18s  %s' "mcp-remote:" "OK Instalado")"
 else
   box_line "  $(printf '%-18s  %s' "mcp-remote:" "-- Verificar instalación")"
@@ -614,7 +616,10 @@ if [ ${#ERRORS[@]} -gt 0 ]; then
   done
   box_empty
   # Si mcp-remote falló, mostrar el error de npm para diagnóstico
-  if ! require_command mcp-remote-proxy && [ -n "${MCP_REMOTE_ERR:-}" ]; then
+  if ! require_command mcp-remote && [ -z "${MCP_REMOTE_ERR:-}" ]; then
+    MCP_REMOTE_ERR="'mcp-remote' no encontrado en PATH. npm global bin: $(npm prefix -g 2>/dev/null)/bin"
+  fi
+  if ! require_command mcp-remote && [ -n "${MCP_REMOTE_ERR:-}" ]; then
     printf "${CYAN}${BOLD}╠══════════════════════════════════════════════════════╣${RESET}\n"
     box_line "  ${YELLOW}${BOLD}DETALLE ERROR mcp-remote:${RESET}"
     box_empty
